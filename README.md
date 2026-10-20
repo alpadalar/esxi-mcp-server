@@ -1,6 +1,5 @@
 # ESXi MCP Server
 
-[![Tests](https://github.com/bright8192/esxi-mcp-server/actions/workflows/test.yml/badge.svg)](.github/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server that lets MCP clients (Claude Desktop,
