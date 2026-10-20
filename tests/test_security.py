@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import logging
+
+import httpx
+import pytest
+
+from esxi_mcp_server.security import (
+    ApiKeyMiddleware,
+    RedactingFilter,
+    extract_api_key,
+    generate_api_key,
+    hash_api_key,
+    is_valid_hash,
+    verify_api_key,
+)
+
+
+def test_hash_roundtrip_and_format():
+    key = generate_api_key()
+    h = hash_api_key(key)
+    assert is_valid_hash(h) and key not in h
+    assert verify_api_key(key, h)
+    assert not verify_api_key(key + "x", h)
+    assert not verify_api_key(None, h)
+    assert not verify_api_key("", h)
+
+
+def test_is_valid_hash_rejects_garbage():
+    assert not is_valid_hash("plaintext")
+    assert not is_valid_hash("sha256:ZZ")
+
+
+def test_extract_api_key():
+    assert extract_api_key([(b"Authorization", b"Bearer abc")]) == "abc"
+    assert extract_api_key([(b"authorization", b"bearer abc")]) == "abc"
+    assert extract_api_key([(b"x-api-key", b" k ")]) == "k"
+    assert extract_api_key([(b"authorization", b"Basic abc")]) is None
+    assert extract_api_key([]) is None
+
+
+async def _ok_app(scope, receive, send):
+    if scope["type"] == "lifespan":
+        return
+    await send({"type": "http.response.start", "status": 200, "headers": []})
+    await send({"type": "http.response.body", "body": b"inner"})
+
+
+@pytest.fixture
+def client():
+    app = ApiKeyMiddleware(_ok_app, hash_api_key("secret-1"))
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t")
+
+
+async def test_middleware_rejects_without_key(client):
+    r = await client.post("/mcp")
+    assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
+
+
+async def test_middleware_rejects_wrong_key(client):
+    r = await client.post("/mcp", headers={"Authorization": "Bearer nope"})
+    assert r.status_code == 401
+
+
+@pytest.mark.parametrize("headers", [{"Authorization": "Bearer secret-1"},
+                                     {"X-API-Key": "secret-1"}])
+async def test_middleware_accepts_valid_key(client, headers):
+    r = await client.post("/mcp", headers=headers)
+    assert r.status_code == 200 and r.text == "inner"
+
+
+async def test_healthz_is_open_and_never_reaches_app(client):
+    r = await client.get("/healthz")
+    assert r.status_code == 200 and r.json() == {"status": "ok"}
+
+
+async def test_options_not_allowed_without_cors(client):
+    r = await client.options("/mcp", headers={"Authorization": "Bearer secret-1"})
+    assert r.status_code == 405
+    assert "access-control-allow-origin" not in r.headers
+
+
+def test_redacting_filter_masks_secrets(caplog):
+    f = RedactingFilter(["hunter2"])
+    assert "hunter2" not in f.redact("login with hunter2 ok")
+    assert f.redact("password=abc123 next") == "password=*** next"
+    assert f.redact("Authorization: Bearer tok.en") == "Authorization: ***"
+    log = logging.getLogger("redact-test")
+    log.addFilter(f)
+    with caplog.at_level(logging.INFO, logger="redact-test"):
+        log.info("connect pwd=%s", "hunter2")
+    assert "hunter2" not in caplog.text

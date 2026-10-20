@@ -24,7 +24,8 @@ def setup_logging(settings: Settings) -> None:
 
 
 def build_http_app(settings: Settings, mcp: object):  # type: ignore[no-untyped-def]
-    assert settings.api_key_hash
+    if not settings.api_key_hash:
+        raise ConfigError("API key hash required for HTTP transport")
     app = mcp.streamable_http_app()  # type: ignore[attr-defined]
     return ApiKeyMiddleware(app, settings.api_key_hash)
 

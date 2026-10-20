@@ -42,3 +42,12 @@ config.json
 # OS
 .DS_Store
 Thumbs.db
+.venv/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.env
+secrets/
