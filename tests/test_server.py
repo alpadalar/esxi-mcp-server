@@ -127,7 +127,8 @@ async def test_new_tools_dispatch(settings, fake_client):
     assert "cpu_usage" in list(res)[0].content
 
 
-async def test_snapshot_and_guest_tools(settings, fake_client):
+async def test_snapshot_and_guest_tools(make_settings, fake_client):
+    settings = make_settings(allow_destructive=True)
     for m in ("create_snapshot", "shutdown_guest", "reboot_guest", "suspend_vm", "reconfigure_vm"):
         getattr(fake_client, m).return_value = "ok"
     mcp = build_server(settings, fake_client)
@@ -138,3 +139,20 @@ async def test_snapshot_and_guest_tools(settings, fake_client):
     await call(mcp, "suspendVM", {"name": "vm1"})
     await call(mcp, "reconfigureVM", {"name": "vm1", "cpu": 2})
     fake_client.reconfigure_vm.assert_called_once_with("vm1", 2, None)
+
+
+async def test_guest_power_ops_are_destructive_class(settings, fake_client):
+    mcp = build_server(settings, fake_client)
+    for name in ("shutdownGuest", "rebootGuest", "suspendVM"):
+        with pytest.raises(ToolError, match="destructive"):
+            await call(mcp, name, {"name": "vm1"})
+
+
+async def test_existing_vm_names_with_odd_characters_accepted_for_lookup(settings, fake_client):
+    fake_client.get_vm_info.return_value = {}
+    mcp = build_server(settings, fake_client)
+    await call(mcp, "getVMInfo", {"name": "web (prod)_\u00e9"})
+    with pytest.raises(ToolError):
+        await call(mcp, "createVM", {"name": "web (prod)", "cpu": 1, "memory": 512})
+    with pytest.raises(ToolError, match="multiple of 4"):
+        await call(mcp, "createVM", {"name": "ok", "cpu": 1, "memory": 513})

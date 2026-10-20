@@ -115,6 +115,16 @@ _ENV_MAP = {
 }
 _BOOL_KEYS = {"insecure", "read_only", "allow_destructive"}
 _TRUE = {"1", "true", "yes", "on"}
+_FALSE = {"0", "false", "no", "off"}
+
+
+def _parse_bool(key: str, raw: str) -> bool:
+    v = raw.strip().lower()
+    if v in _TRUE:
+        return True
+    if v in _FALSE:
+        return False
+    raise ConfigError(f"{key}: invalid boolean {raw!r} (use true/false)")
 
 
 def _read_secret_file(path: str) -> str:
@@ -162,7 +172,7 @@ def load_settings(config_path: str | None = None, env: dict[str, str] | None = N
         if env_key in env and env[env_key] != "":
             val: Any = env[env_key]
             if cfg_key in _BOOL_KEYS:
-                val = val.strip().lower() in _TRUE
+                val = _parse_bool(env_key, val)
             data[cfg_key] = val
 
     # Secrets: env > *_FILE > file path key

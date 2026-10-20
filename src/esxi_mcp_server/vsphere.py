@@ -55,6 +55,7 @@ class VSphereClient:
                 user=s.vcenter_user,
                 pwd=s.vcenter_password.get_secret_value(),
                 sslContext=build_ssl_context(s),
+                httpConnectionTimeout=30,
             )
         except ssl.SSLError as exc:
             raise VSphereError(
@@ -65,9 +66,13 @@ class VSphereClient:
             raise VSphereError("vCenter/ESXi rejected the credentials") from None
         except Exception as exc:
             raise VSphereError(f"cannot connect to vCenter/ESXi: {type(exc).__name__}") from exc
-        self.content = self.si.RetrieveContent()
-        logger.info("Connected to %s", s.vcenter_host)
-        self._resolve_defaults()
+        try:
+            self.content = self.si.RetrieveContent()
+            logger.info("Connected to %s", s.vcenter_host)
+            self._resolve_defaults()
+        except Exception:
+            self.close()  # never keep a half-initialised session
+            raise
 
     def close(self) -> None:
         with self._lock:
@@ -88,6 +93,7 @@ class VSphereClient:
         with self._lock:
             if self.si is None or not self._session_alive():
                 logger.info("(re)connecting to vCenter/ESXi")
+                self.close()
                 self.connect()
 
     def _resolve_defaults(self) -> None:
@@ -127,18 +133,19 @@ class VSphereClient:
     # --------------------------------------------------------------- helpers
     @contextmanager
     def _session(self) -> Iterator[None]:
-        """Serialize access and make sure the session is alive."""
-        with self._lock:
-            self.ensure_connected()
-            try:
-                yield
-            except VSphereError:
-                raise
-            except vim.fault.NotAuthenticated:
+        """Make sure the session is alive; the lock is NOT held while tasks run."""
+        self.ensure_connected()
+        try:
+            yield
+        except VSphereError:
+            raise
+        except vim.fault.NotAuthenticated:
+            with self._lock:
                 self.si = None  # force reconnect on next call
-                raise VSphereError("vSphere session expired; please retry") from None
-            except vmodl.MethodFault as exc:
-                raise VSphereError(f"vSphere error: {getattr(exc, 'msg', None) or type(exc).__name__}") from None
+            raise VSphereError("vSphere session expired; please retry") from None
+        except vmodl.MethodFault as exc:
+            raise VSphereError(
+                f"vSphere error: {getattr(exc, 'msg', None) or type(exc).__name__}") from None
 
     def _objects(self, vimtype: Any, root: Any = None) -> list[Any]:
         view = self.content.viewManager.CreateContainerView(
@@ -178,7 +185,10 @@ class VSphereClient:
                 return task.info.result
             if state == vim.TaskInfo.State.error:
                 err = task.info.error
-                raise VSphereError(f"task failed: {getattr(err, 'msg', None) or err}")
+                detail = (getattr(err, "localizedMessage", None)
+                          or getattr(getattr(err, "fault", None), "msg", None)
+                          or "unknown error")
+                raise VSphereError(f"task failed: {detail}")
             if time.monotonic() >= deadline:
                 try:
                     task.CancelTask()
@@ -302,6 +312,8 @@ class VSphereClient:
                 if kind and series.value:
                     values[kind] = float(series.value[-1])
             return values["tx"], values["rx"]
+        except vim.fault.NotAuthenticated:
+            raise
         except Exception:  # noqa: BLE001 - perf data is best effort
             logger.warning("network performance data unavailable", exc_info=True)
             return None, None
@@ -327,14 +339,14 @@ class VSphereClient:
 
             disk = vim.vm.device.VirtualDeviceSpec(operation=Op.add, fileOperation=FileOp.create)
             disk.device = vim.vm.device.VirtualDisk(
-                capacityInKB=disk_gb * 1024 * 1024, controllerKey=-101, unitNumber=0)
+                key=-102, capacityInKB=disk_gb * 1024 * 1024, controllerKey=-101, unitNumber=0)
             disk.device.backing = vim.vm.device.VirtualDisk.FlatVer2BackingInfo(
                 diskMode="persistent", thinProvisioned=True, datastore=ds)
             devices = [ctrl, disk]
 
             if net is not None:
                 nic = vim.vm.device.VirtualDeviceSpec(operation=Op.add)
-                nic.device = vim.vm.device.VirtualVmxnet3()
+                nic.device = vim.vm.device.VirtualVmxnet3(key=-103)
                 if isinstance(net, vim.dvs.DistributedVirtualPortgroup):
                     nic.device.backing = vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo(
                         port=vim.dvs.PortConnection(

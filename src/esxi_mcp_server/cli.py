@@ -4,18 +4,28 @@ from __future__ import annotations
 
 import argparse
 import logging
+import logging.handlers
+import os
 import sys
 from collections.abc import Sequence
 
 from . import __version__
-from .config import ConfigError, Settings, load_settings
+from .config import ConfigError, Settings, _format_validation_error, load_settings
 from .security import ApiKeyMiddleware, RedactingFilter, generate_api_key, hash_api_key
 
 
 def setup_logging(settings: Settings) -> None:
     """Log to stderr (stdout is the MCP stdio channel) or a file, with secret redaction."""
-    handler: logging.Handler = (logging.FileHandler(settings.log_file) if settings.log_file
-                                else logging.StreamHandler(sys.stderr))
+    handler: logging.Handler
+    if settings.log_file:
+        old = os.umask(0o077)  # log file readable by owner only
+        try:
+            handler = logging.handlers.RotatingFileHandler(
+                settings.log_file, maxBytes=10_000_000, backupCount=5)
+        finally:
+            os.umask(old)
+    else:
+        handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
     handler.addFilter(RedactingFilter([settings.vcenter_password.get_secret_value()]))
     root = logging.getLogger()
@@ -74,7 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"configuration error: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:  # pydantic error from CLI override
-        print(f"configuration error: {exc}", file=sys.stderr)
+        print(f"configuration error: {_format_validation_error(exc)}", file=sys.stderr)
         return 2
     setup_logging(settings)
     run(settings)

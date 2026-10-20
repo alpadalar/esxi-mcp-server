@@ -63,8 +63,10 @@ class ApiKeyMiddleware:
         if scope["type"] == "lifespan":
             await self.app(scope, receive, send)
             return
+        if scope["type"] == "websocket":
+            await send({"type": "websocket.close", "code": 1008})
+            return
         if scope["type"] != "http":
-            await _respond(send, 403, {"error": "forbidden"})
             return
         if scope.get("path") in self.exempt_paths:
             await _respond(send, 200, {"status": "ok"})
@@ -97,7 +99,7 @@ class RedactingFilter(logging.Filter):
 
     _PATTERN = re.compile(
         r"(?i)(password|passwd|pwd|api[_-]?key|token|secret|authorization)"
-        r"(\s*[=:]\s*|\s+)(bearer\s+)?([^\s,;'\"]+)"
+        r"(\s*[=:]\s*)(bearer\s+)?([^\s,;'\"]+)"
     )
 
     def __init__(self, secrets_: list[str] | None = None) -> None:
@@ -116,4 +118,10 @@ class RedactingFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.msg = self.redact(record.getMessage())
         record.args = None
+        if record.exc_info:  # redact tracebacks too
+            record.exc_text = self.redact(
+                logging.Formatter().formatException(record.exc_info))
+            record.exc_info = None
+        elif record.exc_text:
+            record.exc_text = self.redact(record.exc_text)
         return True

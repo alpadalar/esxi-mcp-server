@@ -21,6 +21,8 @@ Expect an acknowledgement within 7 days.
 - Tool inputs are validated; names are never interpolated into shell commands (pyvmomi API only).
 
 ## Known limitations
+- Default datastore is chosen at connect time by free space (accessibility/host mount not checked); set `datastore` explicitly.
+- `authenticate` is informational; no per-IP throttling of failed keys (use the reverse proxy).
 - No per-client authorization: anyone with the API key has the full privileges allowed by policy flags.
 - No rate limiting built in; use the reverse proxy.
 - Not verified against a live vCenter/ESXi by the maintainers of this fork at the time of 0.2.0 (see

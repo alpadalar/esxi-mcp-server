@@ -83,3 +83,8 @@ def test_unknown_file_key_and_bad_extension(tmp_path):
         load_settings(str(g), env={})
     with pytest.raises(ConfigError, match="cannot read"):
         load_settings(str(tmp_path / "missing.yaml"), env={})
+
+
+def test_invalid_boolean_fails_closed():
+    with pytest.raises(ConfigError, match="MCP_READ_ONLY"):
+        load_settings(env={**BASE_ENV, "MCP_READ_ONLY": "y"})

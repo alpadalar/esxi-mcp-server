@@ -90,3 +90,27 @@ def test_redacting_filter_masks_secrets(caplog):
     with caplog.at_level(logging.INFO, logger="redact-test"):
         log.info("connect pwd=%s", "hunter2")
     assert "hunter2" not in caplog.text
+
+
+def test_redaction_covers_tracebacks_and_keeps_plain_text(caplog):
+    f = RedactingFilter(["hunter2"])
+    log = logging.getLogger("redact-tb")
+    log.addFilter(f)
+    with caplog.at_level(logging.ERROR, logger="redact-tb"):
+        try:
+            raise RuntimeError("bad pwd=hunter2")
+        except RuntimeError:
+            log.exception("failed")
+    assert "hunter2" not in caplog.text
+    assert f.redact("invalid API key from 1.2.3.4") == "invalid API key from 1.2.3.4"
+
+
+async def test_websocket_scope_closed_not_http_response():
+    sent = []
+
+    async def send(m):
+        sent.append(m)
+
+    mw = ApiKeyMiddleware(_ok_app, hash_api_key("k"))
+    await mw({"type": "websocket", "path": "/mcp"}, None, send)
+    assert sent == [{"type": "websocket.close", "code": 1008}]

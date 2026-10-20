@@ -90,7 +90,7 @@ def build_server(settings: Settings, client: VSphereClient | None = None) -> Fas
         def op() -> str:
             validation.vm_name(name)
             validation.int_range(cpu, "cpu", 1, settings.max_vm_cpus)
-            validation.int_range(memory, "memory", 4, settings.max_vm_memory_mb)
+            validation.memory_mb(memory, settings.max_vm_memory_mb)
             validation.int_range(disk_gb, "disk_gb", 1, 65536)
             if datastore:
                 validation.object_name(datastore, "datastore")
@@ -103,7 +103,7 @@ def build_server(settings: Settings, client: VSphereClient | None = None) -> Fas
               description="Clone a virtual machine from a template or existing VM.")
     async def clone_vm(template_name: str, new_name: str, datastore: str | None = None) -> str:
         def op() -> str:
-            validation.vm_name(template_name, "template_name")
+            validation.vm_ref(template_name, "template_name")
             validation.vm_name(new_name, "new_name")
             if datastore:
                 validation.object_name(datastore, "datastore")
@@ -115,14 +115,14 @@ def build_server(settings: Settings, client: VSphereClient | None = None) -> Fas
                           "MCP_ALLOW_DESTRUCTIVE=true.")
     async def delete_vm(name: str) -> str:
         def op() -> str:
-            validation.vm_name(name)
+            validation.vm_ref(name)
             return client.delete_vm(name)
         return await run("deleteVM", OpClass.DESTRUCTIVE, op)
 
     @mcp.tool(name="powerOn", annotations=W, description="Power on a virtual machine.")
     async def power_on(name: str) -> str:
         def op() -> str:
-            validation.vm_name(name)
+            validation.vm_ref(name)
             return client.power_on_vm(name)
         return await run("powerOn", OpClass.WRITE, op)
 
@@ -131,7 +131,7 @@ def build_server(settings: Settings, client: VSphereClient | None = None) -> Fas
                           "MCP_ALLOW_DESTRUCTIVE=true. Prefer shutdownGuest.")
     async def power_off(name: str) -> str:
         def op() -> str:
-            validation.vm_name(name)
+            validation.vm_ref(name)
             return client.power_off_vm(name)
         return await run("powerOff", OpClass.DESTRUCTIVE, op)
 
@@ -144,7 +144,7 @@ def build_server(settings: Settings, client: VSphereClient | None = None) -> Fas
               description="Detailed information about one VM (power state, IP, host, ...).")
     async def get_vm_info(name: str) -> str:
         def op() -> str:
-            validation.vm_name(name)
+            validation.vm_ref(name)
             return jdump(client.get_vm_info(name))
         return await run("getVMInfo", OpClass.READ, op)
 
@@ -152,7 +152,7 @@ def build_server(settings: Settings, client: VSphereClient | None = None) -> Fas
               description="CPU (MHz), memory (MB), storage (GB) and network (KBps) usage of a VM.")
     async def get_vm_stats(name: str) -> str:
         def op() -> str:
-            validation.vm_name(name)
+            validation.vm_ref(name)
             return jdump(client.get_vm_performance(name))
         return await run("getVMStats", OpClass.READ, op)
 
@@ -169,53 +169,56 @@ def build_server(settings: Settings, client: VSphereClient | None = None) -> Fas
     ):
         _register_inventory(mcp, run, jdump, R, tool_name, fn, desc)
 
-    @mcp.tool(name="shutdownGuest", annotations=W,
-              description="Graceful guest OS shutdown (requires VMware Tools).")
+    @mcp.tool(name="shutdownGuest", annotations=D,
+              description="Graceful guest OS shutdown (requires VMware Tools). Takes the VM "
+                          "offline: requires MCP_ALLOW_DESTRUCTIVE=true.")
     async def shutdown_guest(name: str) -> str:
         def op() -> str:
-            validation.vm_name(name)
+            validation.vm_ref(name)
             return client.shutdown_guest(name)
-        return await run("shutdownGuest", OpClass.WRITE, op)
+        return await run("shutdownGuest", OpClass.DESTRUCTIVE, op)
 
-    @mcp.tool(name="rebootGuest", annotations=W,
-              description="Graceful guest OS reboot (requires VMware Tools).")
+    @mcp.tool(name="rebootGuest", annotations=D,
+              description="Graceful guest OS reboot (requires VMware Tools). Requires "
+                          "MCP_ALLOW_DESTRUCTIVE=true.")
     async def reboot_guest(name: str) -> str:
         def op() -> str:
-            validation.vm_name(name)
+            validation.vm_ref(name)
             return client.reboot_guest(name)
-        return await run("rebootGuest", OpClass.WRITE, op)
+        return await run("rebootGuest", OpClass.DESTRUCTIVE, op)
 
     @mcp.tool(name="resetVM", annotations=D,
               description="Hard reset a VM. DESTRUCTIVE; requires MCP_ALLOW_DESTRUCTIVE=true.")
     async def reset_vm(name: str) -> str:
         def op() -> str:
-            validation.vm_name(name)
+            validation.vm_ref(name)
             return client.reset_vm(name)
         return await run("resetVM", OpClass.DESTRUCTIVE, op)
 
-    @mcp.tool(name="suspendVM", annotations=W, description="Suspend a virtual machine.")
+    @mcp.tool(name="suspendVM", annotations=D,
+              description="Suspend a VM. Requires MCP_ALLOW_DESTRUCTIVE=true.")
     async def suspend_vm(name: str) -> str:
         def op() -> str:
-            validation.vm_name(name)
+            validation.vm_ref(name)
             return client.suspend_vm(name)
-        return await run("suspendVM", OpClass.WRITE, op)
+        return await run("suspendVM", OpClass.DESTRUCTIVE, op)
 
     @mcp.tool(name="reconfigureVM", annotations=W,
               description="Change the vCPU count and/or memory (MB) of a VM.")
     async def reconfigure_vm(name: str, cpu: int | None = None, memory: int | None = None) -> str:
         def op() -> str:
-            validation.vm_name(name)
+            validation.vm_ref(name)
             if cpu is not None:
                 validation.int_range(cpu, "cpu", 1, settings.max_vm_cpus)
             if memory is not None:
-                validation.int_range(memory, "memory", 4, settings.max_vm_memory_mb)
+                validation.memory_mb(memory, settings.max_vm_memory_mb)
             return client.reconfigure_vm(name, cpu, memory)
         return await run("reconfigureVM", OpClass.WRITE, op)
 
     @mcp.tool(name="listSnapshots", annotations=R, description="List snapshots of a VM.")
     async def list_snapshots(vm_name: str) -> str:
         def op() -> str:
-            validation.vm_name(vm_name, "vm_name")
+            validation.vm_ref(vm_name, "vm_name")
             return jdump(client.list_snapshots(vm_name))
         return await run("listSnapshots", OpClass.READ, op)
 
@@ -223,7 +226,7 @@ def build_server(settings: Settings, client: VSphereClient | None = None) -> Fas
     async def create_snapshot(vm_name: str, snapshot_name: str, description: str = "",
                               memory: bool = False, quiesce: bool = False) -> str:
         def op() -> str:
-            validation.vm_name(vm_name, "vm_name")
+            validation.vm_ref(vm_name, "vm_name")
             validation.object_name(snapshot_name, "snapshot_name")
             validation.object_name(description or "-", "description")
             return client.create_snapshot(vm_name, snapshot_name, description, memory, quiesce)
@@ -234,7 +237,7 @@ def build_server(settings: Settings, client: VSphereClient | None = None) -> Fas
                           "MCP_ALLOW_DESTRUCTIVE=true.")
     async def revert_snapshot(vm_name: str, snapshot_name: str) -> str:
         def op() -> str:
-            validation.vm_name(vm_name, "vm_name")
+            validation.vm_ref(vm_name, "vm_name")
             validation.object_name(snapshot_name, "snapshot_name")
             return client.revert_snapshot(vm_name, snapshot_name)
         return await run("revertSnapshot", OpClass.DESTRUCTIVE, op)
@@ -244,7 +247,7 @@ def build_server(settings: Settings, client: VSphereClient | None = None) -> Fas
     async def remove_snapshot(vm_name: str, snapshot_name: str,
                               remove_children: bool = False) -> str:
         def op() -> str:
-            validation.vm_name(vm_name, "vm_name")
+            validation.vm_ref(vm_name, "vm_name")
             validation.object_name(snapshot_name, "snapshot_name")
             return client.remove_snapshot(vm_name, snapshot_name, remove_children)
         return await run("removeSnapshot", OpClass.DESTRUCTIVE, op)

@@ -21,9 +21,9 @@ Built on the official `mcp` Python SDK (FastMCP), secure by default.
 | Group | Tools |
 |---|---|
 | Inventory | `listVMs`, `listHosts`, `listClusters`, `listDatastores`, `listNetworks`, `getVMInfo`, `getVMStats` (+ resource `vmstats://{vm_name}`) |
-| Lifecycle | `createVM`, `cloneVM`, `powerOn`, `shutdownGuest`, `rebootGuest`, `suspendVM`, `reconfigureVM` |
+| Lifecycle | `createVM`, `cloneVM`, `powerOn`, `reconfigureVM` |
 | Snapshots | `listSnapshots`, `createSnapshot` |
-| Destructive* | `deleteVM`, `powerOff`, `resetVM`, `revertSnapshot`, `removeSnapshot` |
+| Destructive* | `deleteVM`, `powerOff`, `resetVM`, `shutdownGuest`, `rebootGuest`, `suspendVM`, `revertSnapshot`, `removeSnapshot` |
 | Misc | `getServerInfo`, `authenticate` (deprecated, compatibility only) |
 
 \* disabled unless `MCP_ALLOW_DESTRUCTIVE=true`; all non-read tools are disabled by `MCP_READ_ONLY=true`.

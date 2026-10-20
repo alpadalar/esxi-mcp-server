@@ -29,7 +29,7 @@ did not use a valid MCP SDK API; this release is built on the official `mcp` Pyt
   hashed in memory.
 - TLS verification is on by default (`insecure: false`); use `VCENTER_CA_BUNDLE` for private CAs.
 - HTTP binds `127.0.0.1` by default (was `0.0.0.0:8080`); wildcard CORS removed.
-- `deleteVM`, `powerOff` (and new `resetVM`, `revertSnapshot`, `removeSnapshot`) are blocked
+- `deleteVM`, `powerOff` (and new `resetVM`, `shutdownGuest`, `rebootGuest`, `suspendVM`, `revertSnapshot`, `removeSnapshot`) are blocked
   unless `MCP_ALLOW_DESTRUCTIVE=true`. `deleteVM` refuses powered-on VMs.
 - Config file keys unknown to the schema are rejected. `MCP_CONFIG_FILE` and `--config` unchanged.
 - Docker: non-root, read-only image, compose uses secrets; `docker-entrypoint.sh`, `Makefile`,
@@ -37,6 +37,7 @@ did not use a valid MCP SDK API; this release is built on the official `mcp` Pyt
   (Docker docs merged into README).
 
 ### Fixed
+- Existing VMs with any printable name can be addressed (strict naming only for create/clone).
 - Busy-wait on vSphere tasks (100% CPU, no timeout) -> polling with timeout and cancel.
 - Blocking pyvmomi calls no longer run on the event loop.
 - VM creation now sets `files.vmPathName` (required by vSphere).

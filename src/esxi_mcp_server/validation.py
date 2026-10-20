@@ -29,6 +29,18 @@ def object_name(value: str, field: str) -> str:
     return value
 
 
+def vm_ref(value: str, field: str = "name") -> str:
+    """Reference to an existing VM: any printable name (as returned by listVMs)."""
+    return object_name(value, field)
+
+
+def memory_mb(value: int, high: int) -> int:
+    int_range(value, "memory", 4, high)
+    if value % 4:
+        raise ValidationError("memory: must be a multiple of 4 (MB)")
+    return value
+
+
 def int_range(value: int, field: str, low: int, high: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
         raise ValidationError(f"{field}: must be an integer between {low} and {high}")

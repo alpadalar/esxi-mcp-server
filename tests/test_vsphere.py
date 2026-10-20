@@ -49,7 +49,7 @@ def ok_task(result=None):
 def err_task(msg="boom"):
     t = MagicMock()
     t.info.state = vim.TaskInfo.State.error
-    t.info.error = NS(msg=msg)
+    t.info.error = NS(localizedMessage=msg)
     return t
 
 
@@ -323,3 +323,13 @@ def test_close_disconnects(client):
     client.close()
     client._conn.Disconnect.assert_called_once()
     assert client.si is None
+
+
+def test_failed_resolve_leaves_no_half_initialised_session(make_settings, inventory):
+    with patch("esxi_mcp_server.vsphere.connect") as conn:
+        conn.SmartConnect.return_value = inventory.si
+        c = VSphereClient(make_settings(cluster="nope"))
+        with pytest.raises(VSphereError, match="cluster"):
+            c.ensure_connected()
+        assert c.si is None
+        conn.Disconnect.assert_called_once()
