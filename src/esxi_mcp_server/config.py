@@ -15,7 +15,7 @@ from .security import hash_api_key, is_valid_hash
 
 logger = logging.getLogger("esxi_mcp_server.config")
 
-FORBIDDEN_FILE_KEYS = {
+FORBIDDEN_FILE_KEYS = {  # nosec B105 - these are hints, not secrets
     "vcenter_password": "use env VCENTER_PASSWORD or 'vcenter_password_file'",
     "password": "use env VCENTER_PASSWORD or 'vcenter_password_file'",
     "api_key": "store only 'api_key_hash' (run `esxi-mcp-server hash-key`)",

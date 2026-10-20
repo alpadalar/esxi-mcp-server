@@ -1,49 +1,35 @@
-version: '3.8'
-
 services:
   esxi-mcp-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
+    image: esxi-mcp-server:local
     container_name: esxi-mcp-server
     restart: unless-stopped
     ports:
-      - "8080:8080"
-    volumes:
-      # Mount configuration file
-      - ./config.yaml:/app/config/config.yaml:ro
-      # Mount logs directory
-      - ./logs:/app/logs
+      # bound to loopback on the host; put a TLS reverse proxy in front for remote access
+      - "127.0.0.1:8080:8080"
     environment:
-      # Configuration can be overridden via environment variables
-      - VCENTER_HOST=${VCENTER_HOST:-}
-      - VCENTER_USER=${VCENTER_USER:-}
-      - VCENTER_PASSWORD=${VCENTER_PASSWORD:-}
-      - VCENTER_DATACENTER=${VCENTER_DATACENTER:-}
-      - VCENTER_CLUSTER=${VCENTER_CLUSTER:-}
-      - VCENTER_DATASTORE=${VCENTER_DATASTORE:-}
-      - VCENTER_NETWORK=${VCENTER_NETWORK:-VM Network}
-      - VCENTER_INSECURE=${VCENTER_INSECURE:-true}
-      - MCP_API_KEY=${MCP_API_KEY:-}
-      - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
-    networks:
-      - mcp-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    # Resource limits
+      VCENTER_HOST: ${VCENTER_HOST:?set VCENTER_HOST}
+      VCENTER_USER: ${VCENTER_USER:?set VCENTER_USER}
+      VCENTER_PASSWORD_FILE: /run/secrets/vcenter_password
+      MCP_API_KEY_HASH: ${MCP_API_KEY_HASH:?generate with `esxi-mcp-server hash-key`}
+      VCENTER_DATACENTER: ${VCENTER_DATACENTER:-}
+      VCENTER_CLUSTER: ${VCENTER_CLUSTER:-}
+      VCENTER_DATASTORE: ${VCENTER_DATASTORE:-}
+      VCENTER_NETWORK: ${VCENTER_NETWORK:-}
+      VCENTER_INSECURE: ${VCENTER_INSECURE:-false}
+      VCENTER_CA_BUNDLE: ${VCENTER_CA_BUNDLE:-}
+      MCP_READ_ONLY: ${MCP_READ_ONLY:-false}
+      MCP_ALLOW_DESTRUCTIVE: ${MCP_ALLOW_DESTRUCTIVE:-false}
+      MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-INFO}
+    secrets:
+      - vcenter_password
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     deploy:
       resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
+        limits: { memory: 512M, cpus: "0.5" }
 
-networks:
-  mcp-network:
-    driver: bridge
+secrets:
+  vcenter_password:
+    file: ./secrets/vcenter_password   # create locally; git-ignored

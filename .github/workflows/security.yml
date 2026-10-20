@@ -1,0 +1,24 @@
+name: Security
+on:
+  push: { branches: [main] }
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked --extra dev
+      - name: Bandit (SAST)
+        run: uv run bandit -q -r src
+      - name: Dependency audit
+        run: uv export --locked --no-dev --no-hashes --no-emit-project -o /tmp/req.txt >/dev/null && uv run pip-audit -r /tmp/req.txt --no-deps --disable-pip
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t esxi-mcp-server:ci .
