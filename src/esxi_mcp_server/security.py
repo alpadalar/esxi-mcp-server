@@ -97,9 +97,13 @@ async def _respond(send: Any, status: int, body: dict[str, str],
 class RedactingFilter(logging.Filter):
     """Masks registered secrets and obvious credential patterns in log output."""
 
+    _VAL = r"[^\s,;'\"]"
+    # keyword followed by "=" / ":" (any value), or by whitespace and a token-like value
+    # (bearer-prefixed, or 8+ chars containing a digit/symbol) so plain sentences survive.
     _PATTERN = re.compile(
         r"(?i)(password|passwd|pwd|api[_-]?key|token|secret|authorization)"
-        r"(\s*[=:]\s*)(bearer\s+)?([^\s,;'\"]+)"
+        r"(?:(\s*[=:]\s*)(?:bearer\s+)?" + _VAL + r"+"
+        r"|(\s+)(?:bearer\s+" + _VAL + r"+|(?=" + _VAL + r"*[\d_\-.~+/])" + _VAL + r"{8,}))"
     )
 
     def __init__(self, secrets_: list[str] | None = None) -> None:
@@ -113,7 +117,8 @@ class RedactingFilter(logging.Filter):
     def redact(self, text: str) -> str:
         for s in self._secrets:
             text = text.replace(s, "***")
-        return self._PATTERN.sub(lambda m: f"{m.group(1)}{m.group(2)}***", text)
+        return self._PATTERN.sub(
+            lambda m: f"{m.group(1)}{m.group(2) or m.group(3)}***", text)
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.msg = self.redact(record.getMessage())

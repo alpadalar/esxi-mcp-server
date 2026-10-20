@@ -114,3 +114,20 @@ async def test_websocket_scope_closed_not_http_response():
     mw = ApiKeyMiddleware(_ok_app, hash_api_key("k"))
     await mw({"type": "websocket", "path": "/mcp"}, None, send)
     assert sent == [{"type": "websocket.close", "code": 1008}]
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Authorization Bearer xyz", "Authorization ***"),
+    ("api_key abc-12345678", "api_key ***"),
+    ("token=short", "token=***"),
+    ("token validation failed", "token validation failed"),
+    ("the password was rotated", "the password was rotated"),
+])
+def test_redaction_space_separated_tokens(text, expected):
+    assert RedactingFilter().redact(text) == expected
+
+
+def test_known_value_masked_anywhere():
+    f = RedactingFilter()
+    f.add_secret("s3cr3tvalue")
+    assert "s3cr3tvalue" not in f.redact("weird s3cr3tvalue placement")

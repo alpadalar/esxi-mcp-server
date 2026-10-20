@@ -77,3 +77,27 @@ def test_setup_logging_redacts_password(make_settings, capsys):
     logging.getLogger("x").info("connecting with pw-for-tests now")
     err = capsys.readouterr().err
     assert "pw-for-tests" not in err and "***" in err
+
+
+def test_log_file_mode_0600_including_after_rollover(tmp_path):
+    import logging
+    import os
+    import stat
+    path = tmp_path / "app.log"
+    old = os.umask(0o022)  # permissive umask must not matter
+    try:
+        h = cli.SecureRotatingFileHandler(str(path), maxBytes=50, backupCount=2)
+        lg = logging.getLogger("rot-test")
+        lg.propagate = False
+        lg.addHandler(h)
+        lg.setLevel(logging.INFO)
+        for i in range(10):
+            lg.info("line %d with some padding text", i)
+        h.close()
+        lg.removeHandler(h)
+    finally:
+        os.umask(old)
+    files = list(tmp_path.glob("app.log*"))
+    assert len(files) >= 2  # rollover happened
+    for f in files:
+        assert stat.S_IMODE(f.stat().st_mode) == 0o600, f

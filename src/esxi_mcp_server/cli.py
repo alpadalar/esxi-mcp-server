@@ -14,20 +14,27 @@ from .config import ConfigError, Settings, _format_validation_error, load_settin
 from .security import ApiKeyMiddleware, RedactingFilter, generate_api_key, hash_api_key
 
 
+class SecureRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """Rotating log handler that always creates files with mode 0600 (also after rollover)."""
+
+    def _open(self):  # type: ignore[no-untyped-def]
+        fd = os.open(self.baseFilename, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        os.fchmod(fd, 0o600)  # also tightens a pre-existing file
+        return os.fdopen(fd, "a", encoding=self.encoding, errors=self.errors)
+
+
 def setup_logging(settings: Settings) -> None:
     """Log to stderr (stdout is the MCP stdio channel) or a file, with secret redaction."""
     handler: logging.Handler
     if settings.log_file:
-        old = os.umask(0o077)  # log file readable by owner only
-        try:
-            handler = logging.handlers.RotatingFileHandler(
-                settings.log_file, maxBytes=10_000_000, backupCount=5)
-        finally:
-            os.umask(old)
+        handler = SecureRotatingFileHandler(
+            settings.log_file, maxBytes=10_000_000, backupCount=5)
     else:
         handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
-    handler.addFilter(RedactingFilter([settings.vcenter_password.get_secret_value()]))
+    known = [settings.vcenter_password.get_secret_value(), settings.api_key_hash or "",
+             os.environ.get("MCP_API_KEY", "")]  # values are masked wherever they appear
+    handler.addFilter(RedactingFilter(known))
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(settings.log_level)
