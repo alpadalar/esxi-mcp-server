@@ -6,8 +6,8 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that lets MCP
 Cursor, ...) manage **VMware ESXi** and **vCenter** through [pyvmomi](https://github.com/vmware/pyvmomi).
 Built on the official `mcp` Python SDK (FastMCP), secure by default.
 
-> Status: beta. Unit-tested with mocks; see [`.planning/HUMAN-TESTS.md`](.planning/HUMAN-TESTS.md) for the
-> live-environment checklist. Use a least-privilege vSphere role.
+> Status: beta. Unit-tested with mocks, not yet verified against a live ESXi/vCenter. Use a
+> least-privilege vSphere role.
 
 ## Features
 - Transports: **stdio** (default) and **streamable HTTP** (`/mcp`, `/healthz`)

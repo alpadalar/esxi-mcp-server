@@ -25,5 +25,5 @@ Expect an acknowledgement within 7 days.
 - `authenticate` is informational; no per-IP throttling of failed keys (use the reverse proxy).
 - No per-client authorization: anyone with the API key has the full privileges allowed by policy flags.
 - No rate limiting built in; use the reverse proxy.
-- Not verified against a live vCenter/ESXi by the maintainers of this fork at the time of 0.2.0 (see
-  `.planning/HUMAN-TESTS.md`).
+- Not verified against a live vCenter/ESXi by the maintainers of this fork at the time of 0.2.0 (live
+  verification is pending).
